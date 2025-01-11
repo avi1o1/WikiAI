@@ -53,7 +53,7 @@ class Message(BaseModel):
 
 class ConversationHistory(BaseModel):
     messages: List[Dict]
-    analysis: Optional[Dict] = None
+    source: Optional[Dict] = None
 
 class DatabaseManager:
     """ Database manager for storing user and conversation data. """
@@ -78,7 +78,7 @@ class DatabaseManager:
              user_id TEXT,
              message TEXT,
              timestamp TEXT,
-             analysis TEXT,
+             source TEXT,
              model_response TEXT)
         ''')
 
@@ -93,15 +93,15 @@ class DatabaseManager:
         conn.commit()
         conn.close()
 
-    def add_conversation(self, user_id: str, message: str, analysis: dict, model_response: str):
+    def add_conversation(self, user_id: str, message: str, source: dict, model_response: str):
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         timestamp = datetime.now().isoformat()
         c.execute('''
             INSERT INTO conversations
-            (user_id, message, timestamp, analysis, model_response)
+            (user_id, message, timestamp, source, model_response)
             VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, message, timestamp, json.dumps(analysis), model_response))
+        ''', (user_id, message, timestamp, json.dumps(source), model_response))
         conn.commit()
         conn.close()
 
@@ -109,7 +109,7 @@ class DatabaseManager:
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
         c.execute('''
-            SELECT message, timestamp, analysis, model_response
+            SELECT message, timestamp, source, model_response
             FROM conversations
             WHERE user_id = ?
             ORDER BY timestamp
@@ -121,7 +121,7 @@ class DatabaseManager:
             {
                 'message': row[0],
                 'timestamp': row[1],
-                'analysis': json.loads(row[2]),
+                'source': json.loads(row[2]),
                 'model_response': row[3]
             }
             for row in rows
@@ -301,8 +301,8 @@ async def get_history(user_id: str):
 
 
 @app.post("/chat/{user_id}", response_model=dict)
-async def chat(user_id: str, message: Message):                         #TODO: user_id is not used (user specific data can be stored in the database)
-    """Process a chat message using WikiAI and return analysis with response"""
+async def chat(user_id: str, message: Message):
+    """Process a chat message using WikiAI and return source with response"""
 
     global vector_store
     try:
@@ -332,12 +332,29 @@ async def chat(user_id: str, message: Message):                         #TODO: u
         ):
             responses = step["messages"]
         
+        # Create source dictionary for storage
+        source_dict = {
+            "articles": [
+                {
+                    "title": article[0],
+                    "url": article[1]
+                } for article in sources
+            ]
+        }
+        
+        # Store the conversation in the database
+        db_manager.add_conversation(
+            user_id=user_id,
+            message=message.text,
+            source=source_dict,
+            model_response=responses[-1].content
+        )
+        
         return {
             "message": message.text,
             "source": ",".join([f"{article[0]}: {article[1]}" for article in sources]),
             "model_response": responses[-1].content
         }
-        
         
     except Exception as e:
         logger.error(f"Error in chat endpoint: {str(e)}")
