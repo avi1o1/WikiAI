@@ -206,7 +206,7 @@ def generate(state: MessagesState):
     docs_content = "\n\n".join(doc.content for doc in tool_messages)
     system_message_content = (
         "You are a knowledgeable assistant focused on providing accurate Wikipedia-based information. "
-        "Use the provided context to answer questions concisely and precisely. "
+        "Use the provided context to answer questions concisely and precisely. However, don't mention about the context itself. "
         "If the context only partially addresses the question, share what you can confidently say based on it. "
         "If the context is insufficient, clearly state which parts you cannot address. "
         "Aim to be helpful while staying grounded in the provided sources - do not make assumptions or add external information. "
@@ -379,4 +379,5 @@ if __name__ == "__main__":
 
     # Run server
     setup()
+    print("Server setup complete. Starting server...")
     uvicorn.run(app, host=host, port=port)
